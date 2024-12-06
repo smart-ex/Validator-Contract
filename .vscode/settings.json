@@ -1,0 +1,15 @@
+{
+  "solidity.compileUsingRemoteVersion": "v0.8.28",
+  "editor.formatOnSave": true,
+  "[solidity]": {
+    "editor.defaultFormatter": "JuanBlanco.solidity"
+  },
+  "solidity.formatter": "forge",
+  "solidity.packageDefaultDependenciesContractsDirectory": "src",
+  "solidity.packageDefaultDependenciesDirectory": "lib",
+  "solidity.remappings": [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
+  ],
+  "solidity.linter": "solhint",
+  "cSpell.words": ["IERC"]
+}

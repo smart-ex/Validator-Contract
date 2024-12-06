@@ -2,5 +2,8 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+solc = "0.8.28"
+solc-args = ["--optimize", "--optimize-runs", "200"]
+auto_detect_solc = true
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
