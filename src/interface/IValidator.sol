@@ -12,7 +12,7 @@ interface IValidator {
     error NoRewardToClaim();
     error LicenseAlreadyLocked();
     error EpochNotEnded();
-    error EpochRewardThreshold(uint256 threshold);
+    error EpochRewardThreshold(uint256 threshold, uint256 currentEpochReward);
     error MaxLicensesExceeded(uint256 maxLicenses);
     error InsufficientRewardBalance(uint256 currentEpochReward, uint256 rewardTokenBalance);
 

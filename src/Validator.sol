@@ -9,6 +9,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransient {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -32,7 +33,7 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
     uint256 public constant BPS = 10000;
     uint256 public constant REWARD_DECAY = 1000; // 10%
     uint256 public constant EPOCH_DURATION = 1 hours;
-    uint256 public constant EPOCH_REWARD_THRESHOLD = 1 ether;
+    uint256 public constant EPOCH_REWARD_THRESHOLD = 1e9; // reasonable threshold
     uint256 public constant MAX_LICENSES_PER_VALIDATOR = 100; // limit to prevent abuse
 
     uint256 public totalLockedLicenses;
@@ -109,25 +110,32 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
         if (lastEpochTimestamp + EPOCH_DURATION > block.timestamp) {
             revert EpochNotEnded();
         }
-        if (currentEpochReward <= EPOCH_REWARD_THRESHOLD) {
-            revert EpochRewardThreshold(EPOCH_REWARD_THRESHOLD);
+
+        // Calculate epochs passed safely
+        uint256 epochsPassed = (block.timestamp - lastEpochTimestamp) / EPOCH_DURATION;
+        uint256 previousEpochReward = currentEpochReward;
+
+        // Safe decay calculation
+        for (uint256 i = 0; i < epochsPassed; i++) {
+            currentEpochReward = currentEpochReward * (BPS - 1000) / BPS;
+            if (currentEpochReward <= EPOCH_REWARD_THRESHOLD) {
+                revert EpochRewardThreshold(EPOCH_REWARD_THRESHOLD, currentEpochReward);
+            }
         }
 
-        uint256 previousEpoch = currentEpoch;
-        uint256 previousEpochReward = currentEpochReward;
-        // Distribute rewards proportionally
+        // Distribute rewards with rounding protection
         if (totalLockedLicenses > 0) {
             uint256 rewardPerLicense = previousEpochReward / totalLockedLicenses;
-            distributeRewards(rewardPerLicense);
+            if (rewardPerLicense > 0) {
+                distributeRewards(rewardPerLicense);
+            }
         }
 
-        // Decay reward for next epoch
-        currentEpochReward = currentEpochReward * (BPS - REWARD_DECAY) / BPS;
-
-        currentEpoch++;
+        // Update epoch tracking
+        currentEpoch += epochsPassed;
         lastEpochTimestamp = block.timestamp;
 
-        emit EpochEnded(previousEpoch, previousEpochReward, block.timestamp);
+        emit EpochEnded(currentEpoch, previousEpochReward, block.timestamp);
     }
 
     function getValidatorInfo(address validator) external view returns (uint256 rewards, uint256[] memory tokenIds) {
@@ -151,14 +159,15 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
 
     function distributeRewards(uint256 rewardPerLicense) internal {
         address[] memory addresses = validatorAddresses.values();
+        unchecked {
+            for (uint256 i = 0; i < addresses.length; i++) {
+                address validator = addresses[i];
+                uint256 validatorLicenseCount = validatorInfo[validator].tokenIds.length();
 
-        for (uint256 i = 0; i < addresses.length; i++) {
-            address validator = addresses[i];
-            uint256 validatorLicenseCount = validatorInfo[validator].tokenIds.length();
-
-            if (validatorLicenseCount > 0) {
-                uint256 validatorReward = validatorLicenseCount * rewardPerLicense;
-                validatorInfo[validator].rewards += validatorReward;
+                if (validatorLicenseCount > 0) {
+                    uint256 validatorReward = validatorLicenseCount * rewardPerLicense;
+                    validatorInfo[validator].rewards += validatorReward;
+                }
             }
         }
     }

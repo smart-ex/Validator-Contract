@@ -21,7 +21,7 @@ contract ValidatorTest is Test, ERC721Holder {
     error LicenseAlreadyLocked();
     error LicenseNotLocked();
     error EpochNotEnded();
-    error EpochRewardThreshold(uint256 threshold);
+    error EpochRewardThreshold(uint256 threshold, uint256 currentEpochReward);
     error MaxLicensesExceeded(uint256 maxLicenses);
     error InsufficientRewardBalance(uint256 currentEpochReward, uint256 rewardTokenBalance);
     error ERC721IncorrectOwner(address sender, uint256 tokenId, address owner);
@@ -161,9 +161,8 @@ contract ValidatorTest is Test, ERC721Holder {
 
         vm.warp(block.timestamp + 1 hours);
         _epochEnd();
-
         assertEq(validator.currentEpoch(), epochNumber + 1);
-        assertEq(validator.currentEpochReward(), epochReward * (BPS - validator.REWARD_DECAY()) / BPS);
+        assertEq(validator.currentEpochReward(), _calculateRewardByEpochs(1, epochReward));
         assertEq(validator.lastEpochTimestamp(), block.timestamp);
 
         epochNumber = validator.currentEpoch();
@@ -172,7 +171,21 @@ contract ValidatorTest is Test, ERC721Holder {
         _epochEnd();
         // epoch reward decays by 10%
         assertEq(validator.currentEpoch(), epochNumber + 1);
-        assertEq(validator.currentEpochReward(), epochReward * (BPS - validator.REWARD_DECAY()) / BPS);
+        assertEq(validator.currentEpochReward(), _calculateRewardByEpochs(1, epochReward));
+        assertEq(validator.lastEpochTimestamp(), block.timestamp);
+    }
+
+    function test_endEpoch_manyEpochs() public {
+        _mintAndLockLicenses(alice, 2);
+        uint256 epochNumber = validator.currentEpoch();
+        uint256 epochReward = validator.currentEpochReward();
+
+        vm.warp(block.timestamp + 260 hours);
+        uint256 epochsSincePrevious = (block.timestamp - validator.lastEpochTimestamp()) / validator.EPOCH_DURATION();
+        _epochEnd();
+        uint256 reward = _calculateRewardByEpochs(epochsSincePrevious, epochReward);
+        assertEq(validator.currentEpoch(), epochNumber + epochsSincePrevious);
+        assertEq(validator.currentEpochReward(), reward);
         assertEq(validator.lastEpochTimestamp(), block.timestamp);
     }
 
@@ -191,12 +204,9 @@ contract ValidatorTest is Test, ERC721Holder {
 
     function test_endEpoch_RevertWhen_MeetThreshold() public {
         _mintAndLockLicense(alice);
-        uint256 maxEpochs = 66;
-        for (uint256 i = 0; i < maxEpochs; i++) {
-            vm.warp(block.timestamp + 1 hours);
-            _epochEnd();
-        }
-
+        uint256 maxEpochs = 262;
+        vm.warp(block.timestamp + maxEpochs * 1 hours);
+        _epochEnd();
         vm.warp(block.timestamp + 1 hours);
         vm.expectPartialRevert(EpochRewardThreshold.selector);
         _epochEnd();
@@ -206,6 +216,7 @@ contract ValidatorTest is Test, ERC721Holder {
         _mintAndLockLicenses(alice, 2);
         _mintAndLockLicense(bob);
         uint256 epochReward = validator.currentEpochReward();
+        console.log("epochReward: ", epochReward);
         uint256 aliceWantToClaim = epochReward * 2 / 3;
         uint256 bobWantToClaim = epochReward * 1 / 3;
         vm.warp(block.timestamp + 1 hours);
@@ -276,5 +287,15 @@ contract ValidatorTest is Test, ERC721Holder {
         vm.startPrank(owner);
         validator.epochEnd();
         vm.stopPrank();
+    }
+
+    function _calculateRewardByEpochs(uint256 epochs, uint256 initialReward) internal pure returns (uint256) {
+        uint256 reward = initialReward;
+        unchecked {
+            for (uint256 i = 0; i < epochs; i++) {
+                reward = reward * (BPS - 1000) / BPS;
+            }
+        }
+        return reward;
     }
 }

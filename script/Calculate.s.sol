@@ -5,7 +5,7 @@ import {Script, console} from "forge-std/Script.sol";
 
 contract DecayAmountCalculator {
     uint256 public initialAmount = 1_000 ether;
-    uint256 public threshold = 1 ether;
+    uint256 public threshold = 1e9;
 
     function calculate() public view returns (uint256 iterations, uint256 totalSum) {
         uint256 currentAmount = initialAmount;
@@ -14,7 +14,7 @@ contract DecayAmountCalculator {
 
         while (currentAmount >= threshold) {
             totalSum += currentAmount;
-            currentAmount = (currentAmount * 90) / 100; // 10% decay
+            currentAmount = (currentAmount * 9000) / 10000; // 10% decay
             iterations++;
         }
     }
