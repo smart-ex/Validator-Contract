@@ -8,6 +8,7 @@ import {Validator} from "../src/Validator.sol";
 
 contract ValidatorScript is Script {
     Validator public validator;
+    // should be set before run
     address public rewardTokenAddress;
     address public licenseTokenAddress;
 
@@ -16,7 +17,7 @@ contract ValidatorScript is Script {
     function run() public {
         vm.startBroadcast();
 
-        validator = new Validator(IERC20(rewardTokenAddress), IERC721(licenseTokenAddress));
+        validator = new Validator(IERC20(rewardTokenAddress), IERC721(licenseTokenAddress), 1000 ether);
 
         vm.stopBroadcast();
     }
