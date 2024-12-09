@@ -2,7 +2,6 @@
 pragma solidity ^0.8.28;
 
 interface IValidator {
-
     event LicenseLocked(address indexed validator, uint256 indexed tokenId, uint256 timestamp);
     event LicenseUnlocked(address indexed validator, uint256 indexed tokenId, uint256 timestamp);
     event RewardClaimed(address indexed validator, uint256 amount);
