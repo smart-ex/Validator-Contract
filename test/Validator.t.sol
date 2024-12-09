@@ -119,6 +119,7 @@ contract ValidatorTest is Test, ERC721Holder {
         assertEq(validator.totalLockedLicenses(), 1);
         assertEq(licenseOwner, address(0));
         assertEq(lockTimestamp, 0);
+        assertEq(epoch, validator.currentEpoch() - 1);
     }
 
     function test_unlockLicense_ExpectEmit() public {

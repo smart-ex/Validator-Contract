@@ -8,10 +8,12 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransient {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.UintSet;
+    using SafeERC20 for IERC20;
 
     struct LicenseInfo {
         address owner;
@@ -59,8 +61,8 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
         licensesInfo[tokenId] = LicenseInfo({owner: msg.sender, epoch: currentEpoch, lockTimestamp: block.timestamp});
 
         ValidatorInfo storage validator = validatorInfo[msg.sender];
-        validator.tokenIds.add(tokenId);
-        validatorAddresses.add(msg.sender);
+        require(validator.tokenIds.add(tokenId));
+        require(validatorAddresses.add(msg.sender));
         totalLockedLicenses++;
         licenseToken.transferFrom(msg.sender, address(this), tokenId);
 
@@ -98,7 +100,7 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
         }
 
         validatorInfo[msg.sender].rewards = 0;
-        rewardToken.transfer(msg.sender, rewards);
+        rewardToken.safeTransfer(msg.sender, rewards);
 
         emit RewardClaimed(msg.sender, rewards);
     }
@@ -144,7 +146,7 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
 
     function withdrawRewards(uint256 amount) external onlyOwner {
         require(rewardToken.balanceOf(address(this)) >= amount, "Insufficient reward balance");
-        rewardToken.transfer(owner(), amount);
+        rewardToken.safeTransfer(owner(), amount);
     }
 
     function distributeRewards(uint256 rewardPerLicense) internal {
@@ -163,11 +165,10 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
 
     function licenseLicenseRemoval(address validator, uint256 tokenId) internal {
         EnumerableSet.UintSet storage tokenIds = validatorInfo[validator].tokenIds;
-        tokenIds.remove(tokenId);
-        delete licensesInfo[tokenId];
+        require(tokenIds.remove(tokenId));
+        licensesInfo[tokenId].lockTimestamp = 0; // Disable the license by resetting the lock timestamp
         if (tokenIds.length() == 0) {
-            delete validatorInfo[validator];
-            validatorAddresses.remove(validator);
+            require(validatorAddresses.remove(validator));
         }
     }
 }
