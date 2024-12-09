@@ -15,6 +15,7 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
 
     struct LicenseInfo {
         address owner;
+        uint256 epoch;
         uint256 lockTimestamp;
     }
 
@@ -55,7 +56,7 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
         if (validatorInfo[msg.sender].tokenIds.length() >= MAX_LICENSES_PER_VALIDATOR) {
             revert MaxLicensesExceeded(MAX_LICENSES_PER_VALIDATOR);
         }
-        licensesInfo[tokenId] = LicenseInfo({owner: msg.sender, lockTimestamp: block.timestamp});
+        licensesInfo[tokenId] = LicenseInfo({owner: msg.sender, epoch: currentEpoch, lockTimestamp: block.timestamp});
 
         ValidatorInfo storage validator = validatorInfo[msg.sender];
         validator.tokenIds.add(tokenId);
@@ -76,8 +77,9 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
 
         LicenseInfo memory licenseInfo = licensesInfo[tokenId];
 
-        require(block.timestamp >= licenseInfo.lockTimestamp + EPOCH_DURATION, "Cannot unlock before epoch");
-
+        if (licenseInfo.epoch == currentEpoch) {
+            revert EpochNotEnded();
+        }
         licenseLicenseRemoval(msg.sender, tokenId);
         totalLockedLicenses--;
         licenseToken.transferFrom(address(this), msg.sender, tokenId);
@@ -102,15 +104,12 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
     }
 
     function epochEnd() external {
-        if (block.timestamp < lastEpochTimestamp + EPOCH_DURATION) {
+        if (lastEpochTimestamp + EPOCH_DURATION > block.timestamp) {
             revert EpochNotEnded();
         }
         if (currentEpochReward <= EPOCH_REWARD_THRESHOLD) {
             revert EpochRewardThreshold(EPOCH_REWARD_THRESHOLD);
         }
-
-        // require(currentEpochReward >= EPOCH_REWARD_THRESHOLD, "Epoch reward too low");
-        // require(rewardToken.balanceOf(address(this)) >= currentEpochReward, "Insufficient reward balance");
 
         uint256 previousEpoch = currentEpoch;
         uint256 previousEpochReward = currentEpochReward;

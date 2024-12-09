@@ -46,10 +46,6 @@ contract ValidatorTest is Test, ERC721Holder {
         licenseToken = new LicenseToken();
         rewardTokenAddress = address(rewardToken);
         licenseTokenAddress = address(licenseToken);
-        // compute validator contract address
-        // uint64 nonce = vm.getNonce(owner);
-        // address validatorContractAddress = vm.computeCreateAddress(owner, nonce);
-        // deploy validator contract
         vm.startPrank(owner);
         validator = new Validator(IERC20(rewardTokenAddress), IERC721(licenseTokenAddress), initialRewards);
         rewardToken.transfer(address(validator), rewardToken.balanceOf(owner));
@@ -69,8 +65,8 @@ contract ValidatorTest is Test, ERC721Holder {
         uint256[] memory tokenIds = _mintAndLockLicenses(alice, 2);
         _mintAndLockLicenses(bob, 1);
         (uint256 tokenId1, uint256 tokenId2) = (tokenIds[0], tokenIds[1]);
-        (address licenseOwner1, uint256 lockTimestamp1) = validator.licensesInfo(tokenId1);
-        (address licenseOwner2, uint256 lockTimestamp2) = validator.licensesInfo(tokenId2);
+        (address licenseOwner1, uint256 epoch, uint256 lockTimestamp1) = validator.licensesInfo(tokenId1);
+        (address licenseOwner2,, uint256 lockTimestamp2) = validator.licensesInfo(tokenId2);
         assertEq(licenseToken.ownerOf(tokenId1), address(validator));
         assertEq(licenseToken.ownerOf(tokenId2), address(validator));
         assertEq(validator.totalLockedLicenses(), 3);
@@ -79,6 +75,7 @@ contract ValidatorTest is Test, ERC721Holder {
         assertEq(licenseOwner2, alice);
         assertEq(lockTimestamp1, block.timestamp);
         assertEq(lockTimestamp2, block.timestamp);
+        assertEq(epoch, validator.currentEpoch());
     }
 
     function test_lockLicense_expectEmit() public {
@@ -113,9 +110,10 @@ contract ValidatorTest is Test, ERC721Holder {
     function test_unlockLicense() public {
         uint256[] memory tokenIds = _mintAndLockLicenses(alice, 2);
         vm.warp(block.timestamp + 1 hours);
+        _epochEnd();
         vm.startPrank(alice);
         validator.unlockLicense(tokenIds[0]);
-        (address licenseOwner, uint256 lockTimestamp) = validator.licensesInfo(tokenIds[0]);
+        (address licenseOwner, uint256 epoch, uint256 lockTimestamp) = validator.licensesInfo(tokenIds[0]);
         assertEq(licenseToken.ownerOf(tokenIds[0]), alice);
         assertEq(licenseToken.ownerOf(tokenIds[1]), address(validator));
         assertEq(validator.totalLockedLicenses(), 1);
@@ -126,6 +124,7 @@ contract ValidatorTest is Test, ERC721Holder {
     function test_unlockLicense_ExpectEmit() public {
         uint256 tokenId = _mintAndLockLicense(alice);
         vm.warp(block.timestamp + 1 hours);
+        _epochEnd();
         vm.startPrank(alice);
         emit LicenseUnlocked(alice, tokenId, block.timestamp);
         validator.unlockLicense(tokenId);
@@ -150,7 +149,7 @@ contract ValidatorTest is Test, ERC721Holder {
     function test_unlockLicense_RevertWhen_EpochNotEnded() public {
         uint256 tokenId = _mintAndLockLicense(alice);
         vm.prank(alice);
-        vm.expectRevert("Cannot unlock before epoch");
+        vm.expectRevert(EpochNotEnded.selector);
         validator.unlockLicense(tokenId);
     }
 
@@ -191,7 +190,8 @@ contract ValidatorTest is Test, ERC721Holder {
 
     function test_endEpoch_RevertWhen_MeetThreshold() public {
         _mintAndLockLicense(alice);
-        for (uint256 i = 0; i < 66; i++) {
+        uint256 maxEpochs = 66;
+        for (uint256 i = 0; i < maxEpochs; i++) {
             vm.warp(block.timestamp + 1 hours);
             _epochEnd();
         }
