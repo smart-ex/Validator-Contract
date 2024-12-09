@@ -61,8 +61,8 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
         licensesInfo[tokenId] = LicenseInfo({owner: msg.sender, epoch: currentEpoch, lockTimestamp: block.timestamp});
 
         ValidatorInfo storage validator = validatorInfo[msg.sender];
-        require(validator.tokenIds.add(tokenId));
-        require(validatorAddresses.add(msg.sender));
+        validator.tokenIds.add(tokenId);
+        validatorAddresses.add(msg.sender);
         totalLockedLicenses++;
         licenseToken.transferFrom(msg.sender, address(this), tokenId);
 
@@ -166,7 +166,7 @@ contract Validator is IValidator, ERC721Holder, Ownable, ReentrancyGuardTransien
     function licenseLicenseRemoval(address validator, uint256 tokenId) internal {
         EnumerableSet.UintSet storage tokenIds = validatorInfo[validator].tokenIds;
         require(tokenIds.remove(tokenId));
-        licensesInfo[tokenId].lockTimestamp = 0; // Disable the license by resetting the lock timestamp
+        delete licensesInfo[tokenId];
         if (tokenIds.length() == 0) {
             require(validatorAddresses.remove(validator));
         }
